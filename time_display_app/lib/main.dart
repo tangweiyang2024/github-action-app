@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -50,8 +51,9 @@ class TimeDisplayApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       home: const MainScreen(),
       localizationsDelegates: const [
-        DefaultMaterialLocalizations.delegate,
-        DefaultWidgetsLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [
         Locale('zh', 'CN'),
@@ -275,7 +277,6 @@ class AlarmService {
   AlarmService._internal();
 
   List<Map<String, dynamic>> _alarms = [];
-  Timer? _checkTimer;
   bool _initialized = false;
 
   void initialize() {
@@ -327,7 +328,7 @@ class AlarmService {
   }
 
   void _startAlarmCheck() {
-    _checkTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    Timer.periodic(const Duration(seconds: 10), (timer) {
       _checkAlarms();
     });
   }
