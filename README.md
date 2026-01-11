@@ -6,6 +6,7 @@
 
 - **[🚀 快速开始](./QUICK_START.md)** - 5分钟快速部署指南
 - **[📋 详细操作流程](./DEPLOYMENT_GUIDE.md)** - 完整的部署和运维指南
+- **[🍎 iOS部署指南](./IOS_DEPLOYMENT_GUIDE.md)** - iOS应用构建和分发完整指南
 - **[📱 应用说明](./time_display_app/README.md)** - Flutter应用功能说明
 
 ## 🎯 项目概述
@@ -81,6 +82,7 @@ flutter run
 每次成功构建后，可以下载：
 - **release-apk**: Android APK安装文件
 - **release-web**: Web应用包
+- **release-ios**: iOS IPA文件 (无签名版本)
 
 访问路径: **Actions** → 选择工作流运行 → **Artifacts** 部分
 
@@ -107,9 +109,20 @@ flutter build web --release
 ### iOS应用
 
 ```bash
+# 无签名构建 (用于开发测试)
 cd time_display_app
-flutter build ios --release
+flutter build ios --release --no-codesign
+
+# 输出位置: build/ios/iphoneos/Runner.app
+
+# 创建IPA文件
+mkdir -p build/ipa
+cp -r build/ios/iphoneos/Runner.app build/ipa/Payload
+cd build/ipa
+zip -r ../Runner.ipa .
 ```
+
+**注意:** 完整的iOS构建和发布需要macOS系统和Apple Developer账号。详见 [iOS部署指南](./IOS_DEPLOYMENT_GUIDE.md)。
 
 ## 📁 项目结构
 
