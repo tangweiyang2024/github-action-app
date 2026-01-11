@@ -21,10 +21,6 @@ void main() async {
   );
   
   await notifications.initialize(initSettings);
-  
-  // 启动闹钟检查服务
-  AlarmService().initialize();
-  
   runApp(const TimeDisplayApp());
 }
 
@@ -113,7 +109,6 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// 时钟屏幕
 class ClockScreen extends StatefulWidget {
   const ClockScreen({super.key});
 
@@ -231,11 +226,11 @@ class _ClockScreenState extends State<ClockScreen> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.only(top: 10, left: 8),
+                    padding: const EdgeInsets.only(top: 10),
                     child: Text(
                       _period,
                       style: TextStyle(
-                        fontSize: 28,
+                        fontSize: 32,
                         fontWeight: FontWeight.w200,
                         color: isDark ? Colors.white70 : Colors.white70,
                       ),
@@ -268,116 +263,6 @@ class _ClockScreenState extends State<ClockScreen> {
   }
 }
 
-// 闹钟服务
-class AlarmService {
-  static final AlarmService _instance = AlarmService._internal();
-  factory AlarmService() => _instance;
-  AlarmService._internal();
-
-  List<Map<String, dynamic>> _alarms = [];
-  Timer? _checkTimer;
-  bool _initialized = false;
-
-  void initialize() {
-    if (!_initialized) {
-      _loadAlarms();
-      _startAlarmCheck();
-      _initialized = true;
-    }
-  }
-
-  Future<void> _loadAlarms() async {
-    final prefs = await SharedPreferences.getInstance();
-    final alarmsJson = prefs.getString('alarms');
-    if (alarmsJson != null) {
-      _alarms = List<Map<String, dynamic>>.from(
-        json.decode(alarmsJson).map((item) => Map<String, dynamic>.from(item))
-      );
-    }
-  }
-
-  Future<void> _saveAlarms() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('alarms', json.encode(_alarms));
-  }
-
-  Future<void> addAlarm(String time, bool enabled) async {
-    _alarms.add({
-      'time': time,
-      'enabled': enabled,
-      'label': '闹钟',
-      'notified': false,
-    });
-    await _saveAlarms();
-  }
-
-  Future<void> toggleAlarm(int index) async {
-    _alarms[index]['enabled'] = !_alarms[index]['enabled'];
-    _alarms[index]['notified'] = false;
-    await _saveAlarms();
-  }
-
-  Future<void> deleteAlarm(int index) async {
-    _alarms.removeAt(index);
-    await _saveAlarms();
-  }
-
-  List<Map<String, dynamic>> getAlarms() {
-    return List.from(_alarms);
-  }
-
-  void _startAlarmCheck() {
-    _checkTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      _checkAlarms();
-    });
-  }
-
-  Future<void> _checkAlarms() async {
-    final now = DateTime.now();
-    final currentTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    final currentSecond = now.second;
-
-    for (var i = 0; i < _alarms.length; i++) {
-      final alarm = _alarms[i];
-      if (alarm['enabled'] == true && 
-          alarm['time'] == currentTime && 
-          !alarm['notified'] && 
-          currentSecond < 10) {
-        
-        _showNotification(i);
-        alarm['notified'] = true;
-        await _saveAlarms();
-      } else if (alarm['time'] != currentTime) {
-        alarm['notified'] = false;
-      }
-    }
-  }
-
-  Future<void> _showNotification(int index) async {
-    const androidDetails = AndroidNotificationDetails(
-      'alarm_channel',
-      '闹钟',
-      channelDescription: '闹钟提醒',
-      importance: Importance.max,
-      priority: Priority.high,
-      fullScreenIntent: true,
-    );
-    const iosDetails = DarwinNotificationDetails();
-    const notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await notifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      '⏰ 闹钟提醒',
-      '您设置的闹钟时间到了！',
-      notificationDetails,
-    );
-  }
-}
-
-// 闹钟屏幕
 class AlarmScreen extends StatefulWidget {
   const AlarmScreen({super.key});
 
@@ -386,7 +271,6 @@ class AlarmScreen extends StatefulWidget {
 }
 
 class _AlarmScreenState extends State<AlarmScreen> {
-  final AlarmService _alarmService = AlarmService();
   List<Map<String, dynamic>> _alarms = [];
 
   @override
@@ -395,15 +279,21 @@ class _AlarmScreenState extends State<AlarmScreen> {
     _loadAlarms();
   }
 
-  @override
-  void dispose() {
-    super.dispose();
+  Future<void> _loadAlarms() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alarmsJson = prefs.getString('alarms');
+    if (alarmsJson != null) {
+      setState(() {
+        _alarms = List<Map<String, dynamic>>.from(
+          json.decode(alarmsJson).map((item) => Map<String, dynamic>.from(item))
+        );
+      });
+    }
   }
 
-  Future<void> _loadAlarms() async {
-    setState(() {
-      _alarms = _alarmService.getAlarms();
-    });
+  Future<void> _saveAlarms() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('alarms', json.encode(_alarms));
   }
 
   Future<void> _pickTime() async {
@@ -428,30 +318,25 @@ class _AlarmScreenState extends State<AlarmScreen> {
         _alarms.add({
           'time': '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}',
           'enabled': true,
-          'label': '闹钟',
-          'notified': false,
+          'label': 'Alarm',
         });
       });
-      
-      await _alarmService.addAlarm(
-        '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}',
-        true
-      );
+      await _saveAlarms();
     }
   }
 
   Future<void> _toggleAlarm(int index) async {
-    await _alarmService.toggleAlarm(index);
     setState(() {
-      _alarms = _alarmService.getAlarms();
+      _alarms[index]['enabled'] = !_alarms[index]['enabled'];
     });
+    await _saveAlarms();
   }
 
   Future<void> _deleteAlarm(int index) async {
-    await _alarmService.deleteAlarm(index);
     setState(() {
-      _alarms = _alarmService.getAlarms();
+      _alarms.removeAt(index);
     });
+    await _saveAlarms();
   }
 
   @override
@@ -461,7 +346,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('闹钟'),
+        title: const Text('Alarms'),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -478,18 +363,10 @@ class _AlarmScreenState extends State<AlarmScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  '暂无闹钟',
+                  'No alarms set',
                   style: TextStyle(
                     fontSize: 18,
                     color: isDark ? Colors.white60 : Colors.black54,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '点击右下角添加闹钟',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.white38 : Colors.black38,
                   ),
                 ),
               ],
@@ -533,7 +410,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
   }
 }
 
-// 秒表屏幕
 class StopwatchScreen extends StatefulWidget {
   const StopwatchScreen({super.key});
 
@@ -542,55 +418,15 @@ class StopwatchScreen extends StatefulWidget {
 }
 
 class _StopwatchScreenState extends State<StopwatchScreen> {
-  Stopwatch _stopwatch = Stopwatch();
+  final Stopwatch _stopwatch = Stopwatch();
   Timer? _timer;
   final List<String> _laps = [];
-  static const String _stopwatchKey = 'stopwatch_data';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStopwatchData();
-  }
-
-  Future<void> _loadStopwatchData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stopwatchJson = prefs.getString(_stopwatchKey);
-    if (stopwatchJson != null) {
-      final data = json.decode(stopwatchJson);
-      if (data['elapsed'] != null && data['elapsed'] > 0) {
-        setState(() {
-          _stopwatch = Stopwatch()..start();
-          // 注意：我们无法直接设置stopwatch的elapsed时间
-          // 但我们保存了时间，可以显示给用户
-        });
-      }
-      if (data['laps'] != null) {
-        setState(() {
-          _laps.addAll(List<String>.from(data['laps']));
-        });
-      }
-    }
-  }
-
-  Future<void> _saveStopwatchData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = {
-      'elapsed': _stopwatch.elapsedMilliseconds,
-      'laps': _laps,
-    };
-    await prefs.setString(_stopwatchKey, json.encode(data));
-  }
 
   void _startStopwatch() {
     setState(() {
       _stopwatch.start();
       _timer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
         setState(() {});
-        // 每5秒保存一次状态
-        if (_stopwatch.elapsedMilliseconds % 5000 < 10) {
-          _saveStopwatchData();
-        }
       });
     });
   }
@@ -599,7 +435,6 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
     setState(() {
       _stopwatch.stop();
       _timer?.cancel();
-      _saveStopwatchData();
     });
   }
 
@@ -609,14 +444,12 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
       _laps.clear();
       _timer?.cancel();
     });
-    _saveStopwatchData();
   }
 
   void _addLap() {
     if (_stopwatch.isRunning) {
       setState(() {
         _laps.insert(0, _formatTime(_stopwatch.elapsedMilliseconds));
-        _saveStopwatchData();
       });
     }
   }
@@ -647,7 +480,7 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('秒表'),
+        title: const Text('Stopwatch'),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -676,13 +509,13 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
               child: Text(
                 _formatTime(_stopwatch.elapsedMilliseconds),
                 style: TextStyle(
-                  fontSize: 48,
+                  fontSize: 60,
                   fontWeight: FontWeight.w200,
                   color: isDark ? Colors.white : Colors.deepPurple.shade900,
                 ),
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 60),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -754,7 +587,7 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
             if (_laps.isNotEmpty) ...[
               const SizedBox(height: 40),
               const Text(
-                '计次',
+                'Laps',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
@@ -764,7 +597,7 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
                   itemBuilder: (context, index) {
                     return ListTile(
                       title: Text(
-                        '计次 ${_laps.length - index}',
+                        'Lap ${_laps.length - index}',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       trailing: Text(
@@ -783,7 +616,6 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
   }
 }
 
-// 计时器屏幕
 class TimerScreen extends StatefulWidget {
   const TimerScreen({super.key});
 
@@ -796,42 +628,6 @@ class _TimerScreenState extends State<TimerScreen> {
   Duration _remainingDuration = Duration.zero;
   Timer? _timer;
   bool _isRunning = false;
-  static const String _timerKey = 'timer_data';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTimerData();
-  }
-
-  Future<void> _loadTimerData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final timerJson = prefs.getString(_timerKey);
-    if (timerJson != null) {
-      final data = json.decode(timerJson);
-      if (data['selected'] != null && data['remaining'] != null) {
-        setState(() {
-          _selectedDuration = Duration(seconds: data['selected']);
-          _remainingDuration = Duration(seconds: data['remaining']);
-          _isRunning = data['running'] ?? false;
-          
-          if (_isRunning && _remainingDuration.inSeconds > 0) {
-            _startTimer(false);
-          }
-        });
-      }
-    }
-  }
-
-  Future<void> _saveTimerData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = {
-      'selected': _selectedDuration.inSeconds,
-      'remaining': _remainingDuration.inSeconds,
-      'running': _isRunning,
-    };
-    await prefs.setString(_timerKey, json.encode(data));
-  }
 
   Future<void> _pickDuration() async {
     final result = await showDialog<Duration>(
@@ -839,20 +635,18 @@ class _TimerScreenState extends State<TimerScreen> {
       builder: (context) => const DurationPickerDialog(),
     );
 
-    if (result != null && result.inSeconds > 0) {
+    if (result != null) {
       setState(() {
         _selectedDuration = result;
         _remainingDuration = result;
       });
-      await _saveTimerData();
     }
   }
 
-  void _startTimer(bool saveData) {
+  void _startTimer() {
     setState(() {
       _isRunning = true;
     });
-    
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_remainingDuration.inSeconds <= 0) {
         _timer?.cancel();
@@ -861,14 +655,10 @@ class _TimerScreenState extends State<TimerScreen> {
           _remainingDuration = Duration.zero;
         });
         _showTimerCompleteDialog();
-        _saveTimerData();
       } else {
         setState(() {
           _remainingDuration -= const Duration(seconds: 1);
         });
-        if (saveData) {
-          _saveTimerData();
-        }
       }
     });
   }
@@ -878,7 +668,6 @@ class _TimerScreenState extends State<TimerScreen> {
     setState(() {
       _isRunning = false;
     });
-    _saveTimerData();
   }
 
   void _resetTimer() {
@@ -887,19 +676,18 @@ class _TimerScreenState extends State<TimerScreen> {
       _isRunning = false;
       _remainingDuration = _selectedDuration;
     });
-    _saveTimerData();
   }
 
   void _showTimerCompleteDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('计时完成！'),
-        content: const Text('您设置的计时器已结束。'),
+        title: const Text('Timer Complete!'),
+        content: const Text('Your timer has finished.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('确定'),
+            child: const Text('OK'),
           ),
         ],
       ),
@@ -931,7 +719,7 @@ class _TimerScreenState extends State<TimerScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('计时器'),
+        title: const Text('Timer'),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -950,7 +738,7 @@ class _TimerScreenState extends State<TimerScreen> {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    '设置计时器',
+                    'Set a timer',
                     style: TextStyle(
                       fontSize: 18,
                       color: isDark ? Colors.white60 : Colors.black54,
@@ -990,7 +778,7 @@ class _TimerScreenState extends State<TimerScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 60),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -1009,7 +797,7 @@ class _TimerScreenState extends State<TimerScreen> {
                             ),
                             const SizedBox(width: 16),
                             ElevatedButton(
-                              onPressed: () => _startTimer(true),
+                              onPressed: _startTimer,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green,
                                 foregroundColor: Colors.white,
@@ -1047,12 +835,12 @@ class _TimerScreenState extends State<TimerScreen> {
                 ],
               ),
             if (_selectedDuration == Duration.zero)
-              const SizedBox(height: 40),
+              const SizedBox(height: 60),
             if (_selectedDuration == Duration.zero)
               ElevatedButton.icon(
                 onPressed: _pickDuration,
                 icon: const Icon(Icons.add),
-                label: const Text('添加计时器'),
+                label: const Text('Add Timer'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple,
                   foregroundColor: Colors.white,
@@ -1066,7 +854,6 @@ class _TimerScreenState extends State<TimerScreen> {
   }
 }
 
-// 时间选择对话框
 class DurationPickerDialog extends StatefulWidget {
   const DurationPickerDialog({super.key});
 
@@ -1082,16 +869,16 @@ class _DurationPickerDialogState extends State<DurationPickerDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('设置计时器'),
+      title: const Text('Set Timer'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildTimePicker('小时', _hours, (value) => setState(() => _hours = value), 23),
-              _buildTimePicker('分钟', _minutes, (value) => setState(() => _minutes = value), 59),
-              _buildTimePicker('秒', _seconds, (value) => setState(() => _seconds = value), 59),
+              _buildTimePicker('Hours', _hours, (value) => setState(() => _hours = value), 23),
+              _buildTimePicker('Minutes', _minutes, (value) => setState(() => _minutes = value), 59),
+              _buildTimePicker('Seconds', _seconds, (value) => setState(() => _seconds = value), 59),
             ],
           ),
         ],
@@ -1099,7 +886,7 @@ class _DurationPickerDialogState extends State<DurationPickerDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: const Text('Cancel'),
         ),
         ElevatedButton(
           onPressed: () {
@@ -1110,7 +897,7 @@ class _DurationPickerDialogState extends State<DurationPickerDialog> {
             );
             Navigator.pop(context, duration);
           },
-          child: const Text('开始'),
+          child: const Text('Start'),
         ),
       ],
     );
