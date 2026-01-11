@@ -278,6 +278,7 @@ class AlarmService {
 
   List<Map<String, dynamic>> _alarms = [];
   bool _initialized = false;
+  Timer? _checkTimer;
 
   void initialize() {
     if (!_initialized) {
@@ -328,7 +329,8 @@ class AlarmService {
   }
 
   void _startAlarmCheck() {
-    Timer.periodic(const Duration(seconds: 10), (timer) {
+    _checkTimer?.cancel();
+    _checkTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _checkAlarms();
     });
   }
@@ -340,30 +342,47 @@ class AlarmService {
 
     for (var i = 0; i < _alarms.length; i++) {
       final alarm = _alarms[i];
+      final alarmTime = alarm['time'] as String;
+      
+      // 检查是否到了闹钟时间，并且还没有通知过
       if (alarm['enabled'] == true && 
-          alarm['time'] == currentTime && 
+          alarmTime == currentTime && 
           !alarm['notified'] && 
-          currentSecond < 10) {
+          currentSecond == 0) {
         
-        _showNotification(i);
+        await _showNotification(alarmTime);
         alarm['notified'] = true;
         await _saveAlarms();
-      } else if (alarm['time'] != currentTime) {
-        alarm['notified'] = false;
+      } 
+      // 如果时间改变了，重置通知状态
+      else if (alarmTime != currentTime) {
+        if (alarm['notified'] == true) {
+          alarm['notified'] = false;
+          await _saveAlarms();
+        }
       }
     }
   }
 
-  Future<void> _showNotification(int index) async {
+  Future<void> _showNotification(String time) async {
     const androidDetails = AndroidNotificationDetails(
       'alarm_channel',
-      '闹钟',
-      channelDescription: '闹钟提醒',
+      '闹钟提醒',
+      channelDescription: '闹钟提醒通知渠道',
       importance: Importance.max,
       priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
       fullScreenIntent: true,
     );
-    const iosDetails = DarwinNotificationDetails();
+    
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      sound: 'default',
+    );
+    
     const notificationDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
@@ -372,7 +391,7 @@ class AlarmService {
     await notifications.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
       '⏰ 闹钟提醒',
-      '您设置的闹钟时间到了！',
+      '您设置的 $time 闹钟时间到了！',
       notificationDetails,
     );
   }
@@ -547,6 +566,8 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
   Timer? _timer;
   final List<String> _laps = [];
   static const String _stopwatchKey = 'stopwatch_data';
+  int _savedElapsed = 0; // 保存的经过时间（毫秒）
+  DateTime? _lastStartTime; // 最后开始时间
 
   @override
   void initState() {
@@ -559,64 +580,91 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
     final stopwatchJson = prefs.getString(_stopwatchKey);
     if (stopwatchJson != null) {
       final data = json.decode(stopwatchJson);
-      if (data['elapsed'] != null && data['elapsed'] > 0) {
-        setState(() {
-          _stopwatch = Stopwatch()..start();
-          // 注意：我们无法直接设置stopwatch的elapsed时间
-          // 但我们保存了时间，可以显示给用户
-        });
-      }
-      if (data['laps'] != null) {
-        setState(() {
+      setState(() {
+        _savedElapsed = data['elapsed'] ?? 0;
+        _laps.clear();
+        if (data['laps'] != null) {
           _laps.addAll(List<String>.from(data['laps']));
-        });
-      }
+        }
+        
+        // 如果秒表正在运行，恢复计时状态
+        if (data['running'] == true && _savedElapsed > 0) {
+          _lastStartTime = DateTime.now();
+          _stopwatch = Stopwatch()..start();
+          _startUITimer();
+        }
+      });
     }
   }
 
   Future<void> _saveStopwatchData() async {
     final prefs = await SharedPreferences.getInstance();
     final data = {
-      'elapsed': _stopwatch.elapsedMilliseconds,
+      'elapsed': _getCurrentElapsed(),
       'laps': _laps,
+      'running': _stopwatch.isRunning,
     };
     await prefs.setString(_stopwatchKey, json.encode(data));
   }
 
+  // 获取当前总经过时间
+  int _getCurrentElapsed() {
+    if (!_stopwatch.isRunning) {
+      return _savedElapsed;
+    }
+    
+    if (_lastStartTime != null) {
+      return _savedElapsed + DateTime.now().difference(_lastStartTime!).inMilliseconds;
+    }
+    return _stopwatch.elapsedMilliseconds;
+  }
+
   void _startStopwatch() {
     setState(() {
+      if (_stopwatch.isRunning) return;
+      
+      _lastStartTime = DateTime.now();
       _stopwatch.start();
-      _timer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
-        setState(() {});
-        // 每5秒保存一次状态
-        if (_stopwatch.elapsedMilliseconds % 5000 < 10) {
-          _saveStopwatchData();
-        }
-      });
+      _startUITimer();
+      _saveStopwatchData();
+    });
+  }
+
+  void _startUITimer() {
+    _timer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
+      setState(() {});
+      // 每5秒保存一次状态
+      if (_stopwatch.elapsedMilliseconds % 5000 < 10) {
+        _saveStopwatchData();
+      }
     });
   }
 
   void _stopStopwatch() {
     setState(() {
+      _savedElapsed = _getCurrentElapsed();
       _stopwatch.stop();
       _timer?.cancel();
+      _lastStartTime = null;
       _saveStopwatchData();
     });
   }
 
   void _resetStopwatch() {
     setState(() {
+      _savedElapsed = 0;
       _stopwatch.reset();
       _laps.clear();
       _timer?.cancel();
+      _lastStartTime = null;
     });
     _saveStopwatchData();
   }
 
   void _addLap() {
-    if (_stopwatch.isRunning) {
+    if (_stopwatch.isRunning || _savedElapsed > 0) {
       setState(() {
-        _laps.insert(0, _formatTime(_stopwatch.elapsedMilliseconds));
+        _laps.insert(0, _formatTime(_displayElapsed));
         _saveStopwatchData();
       });
     }
@@ -633,6 +681,14 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
     } else {
       return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.${ms.toString().padLeft(2, '0')}';
     }
+  }
+
+  // 获取显示的时间
+  int get _displayElapsed {
+    if (!_stopwatch.isRunning) {
+      return _savedElapsed;
+    }
+    return _getCurrentElapsed();
   }
 
   @override
@@ -675,7 +731,7 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
                 ],
               ),
               child: Text(
-                _formatTime(_stopwatch.elapsedMilliseconds),
+                _formatTime(_displayElapsed),
                 style: TextStyle(
                   fontSize: 48,
                   fontWeight: FontWeight.w200,
@@ -687,7 +743,7 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (!_stopwatch.isRunning && _stopwatch.elapsedMilliseconds == 0)
+                if (!_stopwatch.isRunning && _savedElapsed == 0)
                   ElevatedButton(
                     onPressed: _startStopwatch,
                     style: ElevatedButton.styleFrom(
@@ -811,13 +867,35 @@ class _TimerScreenState extends State<TimerScreen> {
     if (timerJson != null) {
       final data = json.decode(timerJson);
       if (data['selected'] != null && data['remaining'] != null) {
+        final lastSavedTime = data['lastSavedTime'] as int?;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        
         setState(() {
           _selectedDuration = Duration(seconds: data['selected']);
-          _remainingDuration = Duration(seconds: data['remaining']);
           _isRunning = data['running'] ?? false;
           
           if (_isRunning && _remainingDuration.inSeconds > 0) {
-            _startTimer(false);
+            // 计算从上次保存到现在经过的时间
+            if (lastSavedTime != null) {
+              final elapsedSeconds = (now - lastSavedTime) ~/ 1000;
+              _remainingDuration = Duration(seconds: data['remaining']) - Duration(seconds: elapsedSeconds);
+              
+              // 如果时间已经过了，重置为0
+              if (_remainingDuration.inSeconds <= 0) {
+                _remainingDuration = Duration.zero;
+                _isRunning = false;
+              } else {
+                // 重新启动计时器
+                _startTimer(false);
+              }
+            } else {
+              _remainingDuration = Duration(seconds: data['remaining']);
+              if (_remainingDuration.inSeconds > 0) {
+                _startTimer(false);
+              }
+            }
+          } else {
+            _remainingDuration = Duration(seconds: data['remaining']);
           }
         });
       }
@@ -830,6 +908,7 @@ class _TimerScreenState extends State<TimerScreen> {
       'selected': _selectedDuration.inSeconds,
       'remaining': _remainingDuration.inSeconds,
       'running': _isRunning,
+      'lastSavedTime': DateTime.now().millisecondsSinceEpoch,
     };
     await prefs.setString(_timerKey, json.encode(data));
   }
