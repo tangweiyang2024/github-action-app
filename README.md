@@ -60,31 +60,31 @@ flutter pub get
 flutter run
 ```
 
-## GitHub Actions Workflow
+## ⚙️ GitHub Actions自动化流程
 
-The project includes a GitHub Actions workflow that automatically:
+项目配置了GitHub Actions工作流，自动执行以下任务：
 
-✅ Validates Flutter installation  
-✅ Runs code analysis (`flutter analyze`)  
-✅ Executes tests (`flutter test`)  
-✅ Builds Android APK  
-✅ Builds Web application  
-✅ Uploads build artifacts  
+✅ **环境检查** - 验证Flutter安装  
+✅ **代码分析** - 运行 `flutter analyze`  
+✅ **测试执行** - 运行 `flutter test`  
+✅ **APK构建** - 构建Android安装包  
+✅ **Web构建** - 构建Web应用  
+✅ **产物上传** - 上传构建产物  
 
-### Workflow Triggers
+### 触发条件
 
-- Push to `main` or `master` branch
-- Pull requests to `main` or `master` branch
+- 推送代码到 `main` 或 `master` 分支
+- 创建Pull Request到 `main` 或 `master` 分支
 
-### Accessing Build Artifacts
+### 下载构建产物
 
-After each successful workflow run, you can download:
-- **release-apk**: Android APK file
-- **release-web**: Web application bundle
+每次成功构建后，可以下载：
+- **release-apk**: Android APK安装文件
+- **release-web**: Web应用包
 
-Navigate to: **Actions** → Select a workflow run → **Artifacts** section
+访问路径: **Actions** → 选择工作流运行 → **Artifacts** 部分
 
-## Building Locally
+## 🏗️ 本地构建
 
 ### Android APK
 
@@ -93,47 +93,64 @@ cd time_display_app
 flutter build apk --release
 ```
 
-Output: `build/app/outputs/flutter-apk/app-release.apk`
+输出位置: `build/app/outputs/flutter-apk/app-release.apk`
 
-### Web App
+### Web应用
 
 ```bash
 cd time_display_app
 flutter build web --release
 ```
 
-Output: `build/web/` directory
+输出位置: `build/web/` 目录
 
-### iOS App
+### iOS应用
 
 ```bash
 cd time_display_app
 flutter build ios --release
 ```
 
-## Project Structure
+## 📁 项目结构
 
 ```
 github-action-app/
 ├── .github/
 │   └── workflows/
-│       └── flutter-build.yml    # GitHub Actions workflow
-├── time_display_app/             # Flutter application
+│       └── flutter-build.yml    # GitHub Actions工作流配置
+├── time_display_app/             # Flutter应用目录
 │   ├── lib/
-│   │   └── main.dart            # Main app code
-│   ├── android/                 # Android configuration
-│   ├── ios/                     # iOS configuration
-│   ├── web/                     # Web configuration
-│   └── pubspec.yaml             # Dependencies
-└── README.md                    # This file
+│   │   └── main.dart            # 主应用代码
+│   ├── android/                 # Android配置
+│   ├── ios/                     # iOS配置
+│   ├── web/                     # Web配置
+│   └── pubspec.yaml             # 依赖配置
+├── README.md                    # 项目说明文件
+├── QUICK_START.md              # 快速开始指南
+└── DEPLOYMENT_GUIDE.md         # 详细操作流程指南
 ```
 
-## Requirements
+## 📋 环境要求
 
-- **Flutter**: 3.16.5 or higher
-- **Dart**: 3.2.3 or higher
-- **Android Studio** / **VS Code** (with Flutter extension)
+- **Flutter**: 3.16.5 或更高版本
+- **Dart**: 3.2.3 或更高版本
+- **开发工具**: Android Studio 或 VS Code (安装Flutter插件)
 
-## License
+## 📚 相关文档
 
-This project is open source and available under the MIT License.
+- [Flutter官方文档](https://docs.flutter.dev/)
+- [GitHub Actions文档](https://docs.github.com/en/actions)
+- [Dart语言指南](https://dart.dev/guides)
+
+## 📄 许可证
+
+本项目采用MIT许可证开源。
+
+---
+
+## 💡 获取帮助
+
+如果遇到问题，请：
+1. 查看 [详细操作流程指南](./DEPLOYMENT_GUIDE.md)
+2. 检查GitHub Actions工作流日志
+3. 在仓库创建Issue报告问题
